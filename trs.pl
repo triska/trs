@@ -260,33 +260,6 @@ ord_call(lex, Cmp, X, Y, Ord) :- lex(Cmp, X, Y, Ord).
 ord_call(mul, Cmp, X, Y, Ord) :- mul(Cmp, X, Y, Ord).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-   Functors occurring in given equations.
-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-
-equations_functors(Eqs, Fs) :-
-        phrase(eqs_functors_(Eqs), Fs0),
-        sort(Fs0, Fs).
-
-eqs_functors_([]) --> [].
-eqs_functors_([A=B|Es]) -->
-        term_functors(A),
-        term_functors(B),
-        eqs_functors_(Es).
-
-term_functors(Var) --> { var(Var) }, !.
-term_functors(T) -->
-        { T =.. [F|Args] },
-        [F],
-        functors_(Args).
-
-functors_([]) --> [].
-functors_([T|Ts]) -->
-        term_functors(T),
-        functors_(Ts).
-
-%?- group(Gs), equations_functors(Gs, Fs).
-
-/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Huet / Knuth-Bendix Completion
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
@@ -355,23 +328,53 @@ completion(Es0, Ss0, Rs0, Cmp, Rs) :-
             completion(CPs, Rules, [R|Rs1], Cmp, Rs)
         ).
 
-equations_trs(Cmp, Es, Rs) :-
-        completion(Es, [], [], Cmp, Rs).
-
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Try to find a suitable order to create a convergent TRS from
    a list of equations.
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
 equations_trs(Es, Rs) :-
+        equations_order(Es, Cmp),
+        equations_trs(Cmp, Es, Rs).
+
+equations_trs(Cmp, Es, Rs) :-
+        completion(Es, [], [], Cmp, Rs).
+
+equations_order(Es, rpo(Sorted,Stats)) :-
         equations_functors(Es, Fs),
         pairs_keys_values(Stats, Fs, Values),
         maplist(ord_status, Values),
-        permutation(Fs, Sorted),
-        equations_trs(rpo(Sorted,Stats), Es, Rs).
+        permutation(Fs, Sorted).
 
 ord_status(lex).
 ord_status(mul).
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+   Functors occurring in given equations.
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+equations_functors(Eqs, Fs) :-
+        phrase(eqs_functors_(Eqs), Fs0),
+        sort(Fs0, Fs).
+
+eqs_functors_([]) --> [].
+eqs_functors_([A=B|Es]) -->
+        term_functors(A),
+        term_functors(B),
+        eqs_functors_(Es).
+
+term_functors(Var) --> { var(Var) }, !.
+term_functors(T) -->
+        { T =.. [F|Args] },
+        [F],
+        functors_(Args).
+
+functors_([]) --> [].
+functors_([T|Ts]) -->
+        term_functors(T),
+        functors_(Ts).
+
+%?- group(Gs), equations_functors(Gs, Fs).
 
 %?- group(Gs), equations_trs(Gs, Rs).
 
@@ -425,5 +428,7 @@ orient(A=B, A==>B).
 /** <Examples>
 
 ?- group(Gs), equations_trs(Gs, Rs).
+
+?- group(Gs), equations_order(Gs, Cmp), equations_trs(Cmp, Gs, Rs).
 
 */
