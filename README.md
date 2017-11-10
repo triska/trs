@@ -1,6 +1,8 @@
-# Reasoning about Term Rewriting Systems
+# Reasoning about Term Rewriting Systems in Prolog
 
-Consider the group axioms:
+This program implements the **Knuth-Bendix completion** procedure.
+
+As one possible application, consider the *group&nbsp;axioms*:
 
     group([e*X = X,
            i(X)*X = e,
@@ -8,23 +10,28 @@ Consider the group axioms:
 
 To obtain a convergent TRS for these equations, use:
 
-    ?- group(Es), equations_trs(Es, Rs), maplist(writeln, Rs).
+    ?- group(Es), equations_trs(Es, Rs), maplist(portray_clause, Rs).
 
-You obtain the rewrite rules:
+In this case, you obtain the *oriented* rewrite rules:
 
-    i(X1*X2)==>i(X2)*i(X1)
-    X3*i(X3)==>e
-    i(i(X4))==>X4
-    X5*e==>X5
-    X6*X7*X8==>X6* (X7*X8)
-    i(X9)*X9==>e
-    e*X9==>X9
-    i(X10)* (X10*X11)==>X11
-    i(e)==>e
-    X12* (i(X12)*X13)==>X13
+    i(B*A)==>i(A)*i(B).
+    A*i(A)==>e.
+    i(i(A))==>A.
+    A*e==>A.
+    A*B*C==>A*(B*C).
+    i(A)*A==>e.
+    e*A==>A.
+    i(A)*(A*B)==>B.
+    i(e)==>e.
+    A*(i(A)*B)==>B.
 
-You can apply these rules with `normal_form/3`:
+You can use these rewrite&nbsp;rules to decide the *word&nbsp;problem*
+in groups: determining whether two&nbsp;terms are *equal*.
 
-    ?- group(Es), equations_trs(Es, Rs), normal_form(Rs, e*i(i(e)), NF).
+You can apply these rules with `normal_form/3`. For example:
+
+    ?- group(Es),
+       equations_trs(Es, Rs),
+       normal_form(Rs, e*i(i(e)), NF).
     ...
     NF = e .
