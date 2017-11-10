@@ -82,6 +82,8 @@
    to denote a rewrite rule. A TRS is a list of such rules.
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
+:- use_module(library(clpfd)).
+
 :- op(800, xfx, ==>).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -263,23 +265,18 @@ term_size(T, S) :-
         (   var(T) -> S = 1
         ;   T =.. [_|Args],
             foldl(terms_size, Args, 0, S0),
-            S is S0 + 1
+            S #= S0 + 1
         ).
 
 terms_size(T, S0, S) :-
         term_size(T, TS),
-        S is S0 + TS.
+        S #= S0 + TS.
 
-min_rule([], MR, _, Rs, [MR|Rs]).
-min_rule([R|Rs0], MR, N, Rs, Result) :-
-        term_size(R, RS),
-        (   RS < N -> min_rule(Rs0, R, RS, [MR|Rs], Result)
-        ;   min_rule(Rs0, MR, N, [R|Rs], Result)
-        ).
-
-smallest_rule_first([R|Rs0], Rs) :-
-        term_size(R, RS),
-        min_rule(Rs0, R, RS, [], Rs).
+smallest_rule_first(Rs0, Rs) :-
+        maplist(term_size, Rs0, Sizes0),
+        pairs_keys_values(Pairs0, Sizes0, Rs0),
+        keysort(Pairs0, Pairs),
+        pairs_keys_values(Pairs, _, Rs).
 
 %?- smallest_rule_first([f(g(X)) ==> c, f(X) ==> b], Rs).
 
@@ -425,4 +422,7 @@ orient(A=B, A==>B).
 
 ?- group(Gs), equations_order(Gs, Cmp), equations_trs(Cmp, Gs, Rs).
 
+?- Es = [X*X = X^2, (X+Y)^2 = X^2 + 2*X*Y + Y^2],
+   equations_order(Es, Cmp),
+   call_with_inference_limit(equations_trs(Cmp, Es, Rs), 10_000, !).
 */
