@@ -1,6 +1,6 @@
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Reason about Term Rewriting Systems.
-   Written March 8th 2015 by Markus Triska (triska@gmx.at)
+   Written March 8th 2015 by Markus Triska (triska@metalevel.at)
    Public domain code.
 
    Motivating example
@@ -172,21 +172,15 @@ context(conc(F,Ts1,Ts2), Arg, T) :-
 ord(Fs, F1, F2, Ord) :-
         once((nth0(N1, Fs, F1),
               nth0(N2, Fs, F2))),
-        compare(C, N1, N2),
-        comp_ord(C, Ord).
-
-comp_ord(=, eq).
-comp_ord(>, gr).
-comp_ord(<, nge).
+        compare(Ord, N1, N2).
 
 lex(Cmp, Xs, Ys, Ord) :- lex_(Xs, Ys, Cmp, Ord).
 
-lex_([], [], _, eq).
+lex_([], [], _, =).
 lex_([X|Xs], [Y|Ys], Cmp, Ord) :-
         ord_call(Cmp, X, Y, Ord0),
-        (   Ord0 == eq -> lex_(Xs, Ys, Cmp, Ord)
-        ;   Ord0 == gr -> Ord = gr
-        ;   Ord0 == nge -> Ord = nge
+        (   Ord0 == (=) -> lex_(Xs, Ys, Cmp, Ord)
+        ;   Ord = Ord0
         ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -203,7 +197,7 @@ subtract_element(Cmp, Y, Xs0, Xs) :- subtract_first(Xs0, Y, Cmp, Xs).
 
 subtract_first([], _, _, []).
 subtract_first([X|Xs], Y, Cmp, Rs) :-
-        (   ord_call(Cmp, X, Y, eq) -> Rs = Xs
+        (   ord_call(Cmp, X, Y, =) -> Rs = Xs
         ;   Rs = [X|Rest],
             subtract_first(Xs, Y, Cmp, Rest)
         ).
@@ -211,10 +205,10 @@ subtract_first([X|Xs], Y, Cmp, Rs) :-
 mul(Cmp, Ms, Ns, Ord) :-
         multiset_diff(Cmp, Ns, Ms, NMs),
         multiset_diff(Cmp, Ms, Ns, MNs),
-        (   NMs == [], MNs == [] -> Ord = eq
+        (   NMs == [], MNs == [] -> Ord = (=)
         ;   forall(member(N, NMs),
-                   (   member(M, MNs), ord_call(Cmp, M, N, gr))) -> Ord = gr
-        ;   Ord = nge
+                   (   member(M, MNs), ord_call(Cmp, M, N, >))) -> Ord = (>)
+        ;   Ord = (<)
         ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -225,28 +219,28 @@ mul(Cmp, Ms, Ns, Ord) :-
 
 rpo(Fs, Stats, S, T, Ord) :-
         (   var(T) ->
-            (   S == T -> Ord = eq
-            ;   term_variables(S, Vs), member(V, Vs), V == T -> Ord = gr
-            ;   Ord = nge
+            (   S == T -> Ord = (=)
+            ;   term_variables(S, Vs), member(V, Vs), V == T -> Ord = (>)
+            ;   Ord = (<)
             )
-        ;   var(S) -> Ord = nge
+        ;   var(S) -> Ord = (<)
         ;   S =.. [F|Ss], T =.. [G|Ts],
-            (   forall(member(Si, Ss), rpo(Fs, Stats, Si, T, nge)) ->
+            (   forall(member(Si, Ss), rpo(Fs, Stats, Si, T, <)) ->
                 ord(Fs, F, G, Ord0),
-                (   Ord0 == gr ->
-                    (   forall(member(Ti, Ts), rpo(Fs, Stats, S, Ti, gr)) ->
-                        Ord = gr
-                    ;   Ord = nge
+                (   Ord0 == (>) ->
+                    (   forall(member(Ti, Ts), rpo(Fs, Stats, S, Ti, >)) ->
+                        Ord = (>)
+                    ;   Ord = (<)
                     )
-                ;   Ord0 == eq ->
-                    (   forall(member(Ti, Ts), rpo(Fs, Stats, S, Ti, gr)) ->
+                ;   Ord0 == (=) ->
+                    (   forall(member(Ti, Ts), rpo(Fs, Stats, S, Ti, >)) ->
                         memberchk(F-Stat, Stats),
                         ord_call(Stat, rpo(Fs, Stats), Ss, Ts, Ord)
-                    ;   Ord = nge
+                    ;   Ord = (<)
                     )
-                ;   Ord0 == nge -> Ord = nge
+                ;   Ord0 == (<) -> Ord = (<)
                 )
-            ;   Ord = gr
+            ;   Ord = (>)
             )
         ).
 
@@ -309,10 +303,10 @@ orient([S0=T0|Es0], Ss0, Rs0, Cmp, Ss, Rs) :-
         normal_form(Rules, S0, S),
         normal_form(Rules, T0, T),
         (   S == T -> orient(Es0, Ss0, Rs0, Cmp, Ss, Rs)
-        ;   ord_call(Cmp, S, T, gr) ->
+        ;   ord_call(Cmp, S, T, >) ->
             add_rule(S ==> T, Es0, Ss0, Rs0, Es1, Ss1, Rs1),
             orient(Es1, Ss1, Rs1, Cmp, Ss, Rs)
-        ;   ord_call(Cmp, T, S, gr) ->
+        ;   ord_call(Cmp, T, S, >) ->
             add_rule(T ==> S, Es0, Ss0, Rs0, Es1, Ss1, Rs1),
             orient(Es1, Ss1, Rs1, Cmp, Ss, Rs)
         ;   false /* rule cannot be oriented */
