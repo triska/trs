@@ -2,6 +2,8 @@
 
 This program implements the **Knuth-Bendix completion** procedure.
 
+Project page: **https://www.metalevel.at/trs/**
+
 As one possible application, consider the *group&nbsp;axioms*:
 
     group([e*X = X,
