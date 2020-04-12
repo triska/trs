@@ -1,6 +1,6 @@
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Reason about Term Rewriting Systems.
-   Written March 8th 2015 by Markus Triska (triska@metalevel.at)
+   Written 2015-2020 by Markus Triska (triska@metalevel.at)
    Public domain code.
 
    Motivating example
@@ -37,20 +37,20 @@
 
    For example (see group/1 below):
 
-      ?- group(Gs), equations_trs(Gs, Rs), maplist(writeln, Rs).
+      ?- group(Gs), equations_trs(Gs, Rs), maplist(portray_clause, Rs).
 
    yielding the convergent TRS:
 
-         i(X1*X2)==>i(X2)*i(X1)
-         X3*i(X3)==>e
-         i(i(X4))==>X4
-         X5*e==>X5
-         X6*X7*X8==>X6* (X7*X8)
-         i(X9)*X9==>e
-         e*X9==>X9
-         i(X10)* (X10*X11)==>X11
-         i(e)==>e
-         X12* (i(X12)*X13)==>X13
+      i(B*A)==>i(A)*i(B).
+      A*i(A)==>e.
+      i(i(A))==>A.
+      A*e==>A.
+      A*B*C==>A*(B*C).
+      i(A)*A==>e.
+      e*A==>A.
+      i(A)*(A*B)==>B.
+      i(e)==>e.
+      A*(i(A)*B)==>B.
 
    From this, we see that i(i(X)) = X is one of the consequences of
    the equations above. To see whether two terms are identical under
@@ -63,6 +63,18 @@
       ...
       X = NF .
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+
+:- use_module(library(clpz)).
+:- use_module(library(lists)).
+:- use_module(library(dcgs)).
+:- use_module(library(pairs)).
+:- use_module(library(iso_ext)).
+:- use_module(library(format)).
+
+permutation([], []).
+permutation([X|Xs], Ys) :-
+        permutation(Xs, Yss),
+        select(X, Ys, Yss).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Variables in equations and TRS are represented by Prolog variables.
@@ -81,8 +93,6 @@
 
    to denote a rewrite rule. A TRS is a list of such rules.
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
-
-:- use_module(library(clpfd)).
 
 :- op(800, xfx, ==>).
 
@@ -137,21 +147,21 @@ critical_pairs_([R|Rs], Rules) -->
 
 rule_cps(T ==> R, Rules, Cs) -->
         (   { var(T) } -> []
-        ;   head_cps(Rules, T ==> R, Cs),
+        ;   roots_cps(Rules, T ==> R, Cs),
             { T =.. [F|Ts] },
             inner_cps(Ts, F, [], R, Rules, Cs)
         ).
 
-head_cps([], _, _) --> [].
-head_cps([Head0==>Right0|Rules], T0==>R0, Cs0) -->
-        { copy_term(Cs0-T0-R0, Cs-T-R),
-          copy_term(Head0-Right0, Head-Right) },
-        (   { unify_with_occurs_check(T, Head) } ->
-            { foldl(context, Cs, Right, CRight) },
-            [R=CRight]
+roots_cps([], _, _) --> [].
+roots_cps([Left0==>Right0|Rules], L0==>R0, Cs0) -->
+        { copy_term(f(L0,R0,Cs0), f(L,R,Cs)),
+          copy_term(Left0-Right0, Left-Right) },
+        (   { unify_with_occurs_check(L, Left) } ->
+            { foldl(context, Cs, Right, Reduced) },
+            [R=Reduced]
         ;   []
         ),
-        head_cps(Rules, T0==>R0, Cs0).
+        roots_cps(Rules, L0==>R0, Cs0).
 
 inner_cps([], _, _, _, _, _) --> [].
 inner_cps([T|Ts], F, Left0, R, Rules, Cs) -->
@@ -176,11 +186,17 @@ ord(Fs, F1, F2, Ord) :-
               nth0(N2, Fs, F2))),
         compare(Ord, N1, N2).
 
+nth0(0, [E|_], E).
+nth0(N0, [_|Es], E) :-
+        N0 #> 0,
+        N1 #= N0 - 1,
+        nth0(N1, Es, E).
+
 lex(Cmp, Xs, Ys, Ord) :- lex_(Xs, Ys, Cmp, Ord).
 
 lex_([], [], _, =).
 lex_([X|Xs], [Y|Ys], Cmp, Ord) :-
-        ord_call(Cmp, X, Y, Ord0),
+        call(Cmp, X, Y, Ord0),
         (   Ord0 == (=) -> lex_(Xs, Ys, Cmp, Ord)
         ;   Ord = Ord0
         ).
@@ -199,7 +215,7 @@ subtract_element(Cmp, Y, Xs0, Xs) :- subtract_first(Xs0, Y, Cmp, Xs).
 
 subtract_first([], _, _, []).
 subtract_first([X|Xs], Y, Cmp, Rs) :-
-        (   ord_call(Cmp, X, Y, =) -> Rs = Xs
+        (   call(Cmp, X, Y, =) -> Rs = Xs
         ;   Rs = [X|Rest],
             subtract_first(Xs, Y, Cmp, Rest)
         ).
@@ -209,7 +225,7 @@ mul(Cmp, Ms, Ns, Ord) :-
         multiset_diff(Cmp, Ms, Ns, MNs),
         (   NMs == [], MNs == [] -> Ord = (=)
         ;   forall(member(N, NMs),
-                   (   member(M, MNs), ord_call(Cmp, M, N, >))) -> Ord = (>)
+                   (   member(M, MNs), call(Cmp, M, N, >))) -> Ord = (>)
         ;   Ord = (<)
         ).
 
@@ -237,7 +253,7 @@ rpo(Fs, Stats, S, T, Ord) :-
                 ;   Ord0 == (=) ->
                     (   forall(member(Ti, Ts), rpo(Fs, Stats, S, Ti, >)) ->
                         memberchk(F-Stat, Stats),
-                        ord_call(Stat, rpo(Fs, Stats), Ss, Ts, Ord)
+                        call(Stat, rpo(Fs, Stats), Ss, Ts, Ord)
                     ;   Ord = (<)
                     )
                 ;   Ord0 == (<) -> Ord = (<)
@@ -246,77 +262,61 @@ rpo(Fs, Stats, S, T, Ord) :-
             )
         ).
 
-% explicit meta-call to detect safety in SWISH
-% ord_call/[4,5] can be replaced by call/[4,5] when SWISH improves.
-
-ord_call(ord(Fs), X, Y, Ord) :- ord(Fs, X, Y, Ord).
-ord_call(rpo(Fs,Stats), X, Y, Ord) :- rpo(Fs, Stats, X, Y, Ord).
-
-ord_call(lex, Cmp, X, Y, Ord) :- lex(Cmp, X, Y, Ord).
-ord_call(mul, Cmp, X, Y, Ord) :- mul(Cmp, X, Y, Ord).
-
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
    Huet / Knuth-Bendix Completion
 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
 
-%?- term_size(f(g(X),y), T).
+%?- rule_size(f(g(X),y), T).
 
-term_size(T, S) :-
-        (   var(T) -> S = 1
+rule_size(T, S) :-
+        (   var(T) -> S #= 1
         ;   T =.. [_|Args],
-            foldl(terms_size, Args, 0, S0),
+            foldl(rule_size_, Args, 0, S0),
             S #= S0 + 1
         ).
 
-terms_size(T, S0, S) :-
-        term_size(T, TS),
+rule_size_(T, S0, S) :-
+        rule_size(T, TS),
         S #= S0 + TS.
 
 smallest_rule_first(Rs0, Rs) :-
-        maplist(term_size, Rs0, Sizes0),
+        maplist(rule_size, Rs0, Sizes0),
         pairs_keys_values(Pairs0, Sizes0, Rs0),
         keysort(Pairs0, Pairs),
         pairs_keys_values(Pairs, _, Rs).
 
 %?- smallest_rule_first([f(g(X)) ==> c, f(X) ==> b], Rs).
 
-add_rule(Rule, Es0, Ss0, Rs0, Es, [Rule|Ss], Rs) :-
-        append([Rule|Rs0], Ss0, Rules),
-        simpler(Ss0, Rule, Rules, Es0, [], Es1, Ss),
-        simpler(Rs0, Rule, Rules, Es1, [], Es, Rs).
-
-simpler([], _, _, Es, Us, Es, Us).
-simpler([G0==>D0|Rs], Rule, Rules, Es0, Us0, Es, Us) :-
-        normal_form([Rule], G0, G),
-        (   G0 == G ->
-            normal_form(Rules, D0, D),
-            simpler(Rs, Rule, Rules, Es0, [G==>D|Us0], Es, Us)
-        ;   simpler(Rs, Rule, Rules, [G=D0|Es0], Us0, Es, Us)
-        ).
-
-orient([], Ss, Rs, _, Ss, Rs).
-orient([S0=T0|Es0], Ss0, Rs0, Cmp, Ss, Rs) :-
+orient([], _, Ss, Ss, Rs, Rs).
+orient([S0=T0|Es0], Cmp, Ss0, Ss, Rs0, Rs) :-
         append(Rs0, Ss0, Rules),
-        normal_form(Rules, S0, S),
-        normal_form(Rules, T0, T),
-        (   S == T -> orient(Es0, Ss0, Rs0, Cmp, Ss, Rs)
-        ;   ord_call(Cmp, S, T, >) ->
-            add_rule(S ==> T, Es0, Ss0, Rs0, Es1, Ss1, Rs1),
-            orient(Es1, Ss1, Rs1, Cmp, Ss, Rs)
-        ;   ord_call(Cmp, T, S, >) ->
-            add_rule(T ==> S, Es0, Ss0, Rs0, Es1, Ss1, Rs1),
-            orient(Es1, Ss1, Rs1, Cmp, Ss, Rs)
-        ;   false /* rule cannot be oriented */
+        maplist(normal_form(Rules), [S0,T0], [S,T]),
+        (   S == T -> orient(Es0, Cmp, Ss0, Ss, Rs0, Rs)
+        ;   (   call(Cmp, S, T, >) -> Rule = (S ==> T)
+            ;   call(Cmp, T, S, >) -> Rule = (T ==> S)
+            ;   false /* identity cannot be oriented */
+            ),
+            foldl(simpler(Rule, Rules), Ss0, Es0-[], Es1-Ss1),
+            foldl(simpler(Rule, Rules), Rs0, Es1-[], Es-Rs1),
+            orient(Es, Cmp, [Rule|Ss1], Ss, Rs1, Rs)
         ).
 
-completion(Es0, Ss0, Rs0, Cmp, Rs) :-
-        orient(Es0, Ss0, Rs0, Cmp, Ss1, Rs1),
+simpler(Rule, Rules, L0==>R0, Es0-Us0, Es-Us) :-
+        normal_form([Rule], L0, L),
+        (   L0 == L ->
+            normal_form([Rule|Rules], R0, R),
+            Es-Us = Es0-[L==>R|Us0]
+        ;   Es-Us = [L=R0|Es0]-Us0
+        ).
+
+completion(Es0, Cmp, Ss0, Rs0, Rs) :-
+        orient(Es0, Cmp, Ss0, Ss1, Rs0, Rs1),
         (   Ss1 == [] -> Rs = Rs1
-        ;   smallest_rule_first(Ss1, [R|Rules]),
+        ;   smallest_rule_first(Ss1, [R|Ss]),
             phrase((critical_pairs_([R], Rs1),
                     critical_pairs_(Rs1, [R]),
                     critical_pairs_([R], [R])), CPs),
-            completion(CPs, Rules, [R|Rs1], Cmp, Rs)
+            completion(CPs, Cmp, Ss, [R|Rs1], Rs)
         ).
 
 /* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -329,7 +329,7 @@ equations_trs(Es, Rs) :-
         equations_trs(Cmp, Es, Rs).
 
 equations_trs(Cmp, Es, Rs) :-
-        completion(Es, [], [], Cmp, Rs).
+        completion(Es, Cmp, [], [], Rs).
 
 equations_order(Es, rpo(Sorted,Stats)) :-
         equations_functors(Es, Fs),
@@ -424,5 +424,6 @@ orient(A=B, A==>B).
 
 ?- Es = [X*X = X^2, (X+Y)^2 = X^2 + 2*X*Y + Y^2],
    equations_order(Es, Cmp),
-   call_with_inference_limit(equations_trs(Cmp, Es, Rs), 10_000, !).
+   call_with_inference_limit(equations_trs(Cmp, Es, Rs), 10000, !).
 */
+
