@@ -16,7 +16,7 @@ To obtain a convergent TRS for these equations, use:
 
 In this case, you obtain the *oriented* rewrite rules:
 
-    i(B*A)==>i(A)*i(B).
+    i(A*B)==>i(B)*i(A).
     A*i(A)==>e.
     i(i(A))==>A.
     A*e==>A.
